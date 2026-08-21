@@ -1,0 +1,77 @@
+name: Publish Paladin 0.2.8 beta MSI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-paladin-0.2.8-beta.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TAG: paladin-0.2.8-beta
+      EXPECTED_SHA256: 6e3670caa0cb8f49ae0c9198c0dbb3085f30022354ec36a4e5be333ec7ebf150
+      EXPECTED_BYTES: '119398400'
+      SOURCE_URL: 'https://sdmntprwestus3.oaiusercontent.com/files/00000000-5adc-81fd-86bb-276d80002d55/raw?se=2026-08-21T06%3A29%3A36Z&sp=r&sv=2026-02-06&sr=b&scid=6cb4b4f3-a468-5dd0-8e23-f1319e7a093f&skoid=5e713cdb-766b-475e-a3ca-8adb6cf99aa0&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-20T22%3A11%3A03Z&ske=2026-08-21T22%3A11%3A03Z&sks=b&skv=2026-02-06&sig=8uB/cRytoFhAl5FCFI3zG1WJQql7FfF2GhP2WCRu5UU%3D'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download verified validation artifact
+        run: curl --fail --location --retry 3 "$SOURCE_URL" -o paladin-validation.zip
+
+      - name: Extract and verify MSI
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -o paladin-validation.zip -d extracted
+          MSI="$(find extracted -type f -name '*.msi' -print -quit)"
+          test -n "$MSI"
+          actual_sha="$(sha256sum "$MSI" | awk '{print $1}')"
+          actual_bytes="$(stat -c%s "$MSI")"
+          test "$actual_sha" = "$EXPECTED_SHA256"
+          test "$actual_bytes" = "$EXPECTED_BYTES"
+          cp "$MSI" paladin-windows-0.2.8-beta.msi
+          printf '%s  %s\n' "$actual_sha" 'paladin-windows-0.2.8-beta.msi' > paladin-windows-0.2.8-beta.sha256
+          cat > paladin-windows-0.2.8-beta-manifest.json <<EOF
+          {
+            "product": "Paladin AI Security",
+            "platform": "windows",
+            "channel": "UNSIGNED BETA",
+            "testingOnly": true,
+            "version": "0.2.8-beta",
+            "filename": "paladin-windows-0.2.8-beta.msi",
+            "bytes": 119398400,
+            "sha256": "6e3670caa0cb8f49ae0c9198c0dbb3085f30022354ec36a4e5be333ec7ebf150",
+            "sourceCommit": "e9130ccf92fe73e281fb4228d8c506caa955b01c",
+            "responsivenessSmokeTest": "passed",
+            "responsivenessSampleMs": 500,
+            "maxConsecutiveUnresponsiveSamples": 0,
+            "nativeProtectionCenter": true,
+            "systemTray": true,
+            "packetPayloadCapture": false
+          }
+          EOF
+
+      - name: Create or update public prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" paladin-windows-0.2.8-beta.msi paladin-windows-0.2.8-beta.sha256 paladin-windows-0.2.8-beta-manifest.json --clobber
+            gh release edit "$TAG" --prerelease --title 'Paladin AI Security 0.2.8 Beta' --notes 'UNSIGNED BETA / testing only. Windows x86_64. SHA-256: 6e3670caa0cb8f49ae0c9198c0dbb3085f30022354ec36a4e5be333ec7ebf150. Built from validated 0.2.8 source; 40 responsiveness samples at 500 ms with zero consecutive unresponsive samples.'
+          else
+            gh release create "$TAG" paladin-windows-0.2.8-beta.msi paladin-windows-0.2.8-beta.sha256 paladin-windows-0.2.8-beta-manifest.json --prerelease --title 'Paladin AI Security 0.2.8 Beta' --notes 'UNSIGNED BETA / testing only. Windows x86_64. SHA-256: 6e3670caa0cb8f49ae0c9198c0dbb3085f30022354ec36a4e5be333ec7ebf150. Built from validated 0.2.8 source; 40 responsiveness samples at 500 ms with zero consecutive unresponsive samples.'
+          fi
+
+      - name: Verify public asset URL
+        run: |
+          curl --fail --head --location "https://github.com/hammedia426-dev/index.html/releases/download/$TAG/paladin-windows-0.2.8-beta.msi"
