@@ -1,0 +1,80 @@
+name: Publish Paladin 0.2.8 beta.3 MSI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-paladin-0.2.8-beta3.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download verified beta.3 artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            'https://sdmntprwestus3.oaiusercontent.com/files/00000000-cc60-81fd-a8c6-82770b5af5ea/raw?se=2026-08-21T08%3A33%3A25Z&sp=r&sv=2026-02-06&sr=b&scid=55e2339b-02ad-5014-809f-29b92fd7e5f2&skoid=4b04981f-b1dc-41e0-a770-8ce0d5c8f411&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-20T22%3A00%3A43Z&ske=2026-08-21T22%3A00%3A43Z&sks=b&skv=2026-02-06&sig=9pAm/ifMRJ96oma6ypvUOGRQIndc7kHlPRU9/c%2BC/hM%3D' \
+            -o artifact.zip
+          unzip -o artifact.zip
+          test -f paladin-windows-0.2.8-beta.3.msi
+          test "$(sha256sum paladin-windows-0.2.8-beta.3.msi | awk '{print $1}')" = '6abc6d8d80dd0f4e084d5eaf4ad81514c4d708b5da1284353739fa25f62306ff'
+          test "$(stat -c%s paladin-windows-0.2.8-beta.3.msi)" = '119402496'
+
+      - name: Create or update beta.3 public release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='paladin-0.2.8-beta.3'
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --prerelease --title 'Paladin AI Security 0.2.8 beta.3' --notes 'Unsigned Windows beta refresh. Predefined social network dropdowns, provider-returned account selection only, Malware/Defender, Geo Map, tray/minimize, maintenance, network intelligence and Agent features.'
+          fi
+          gh release upload "$tag" paladin-windows-0.2.8-beta.3.msi --clobber
+
+      - name: Verify public asset round-trip
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://github.com/hammedia426-dev/index.html/releases/download/paladin-0.2.8-beta.3/paladin-windows-0.2.8-beta.3.msi'
+          curl --fail --location --silent --show-error "$url" -o public.msi
+          test "$(sha256sum public.msi | awk '{print $1}')" = '6abc6d8d80dd0f4e084d5eaf4ad81514c4d708b5da1284353739fa25f62306ff'
+          test "$(stat -c%s public.msi)" = '119402496'
+
+      - name: Write public verification receipt
+        shell: bash
+        run: |
+          cat > paladin-0.2.8-beta.3-public-release.json <<'JSON'
+          {
+            "product": "Paladin AI Security",
+            "version": "0.2.8-beta.3",
+            "nativeInstallerVersion": "0.2.8-3",
+            "filename": "paladin-windows-0.2.8-beta.3.msi",
+            "bytes": 119402496,
+            "sha256": "6abc6d8d80dd0f4e084d5eaf4ad81514c4d708b5da1284353739fa25f62306ff",
+            "sourceCommit": "f7153711edd59e3532a4a7b81189796b5edd640f",
+            "publicAssetVerified": true,
+            "predefinedSocialNetworks": true,
+            "socialAccountSelection": "provider-returned-dropdown-only",
+            "manualSocialHandles": false,
+            "packetGeoMap": true,
+            "systemTray": true,
+            "trayMinimize": true,
+            "malwareAntivirus": true,
+            "maintenanceTools": true,
+            "remoteAccessInventory": true,
+            "geminiAgent": true
+          }
+          JSON
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add paladin-0.2.8-beta.3-public-release.json
+          git commit -m 'Record verified Paladin 0.2.8 beta.3 public release'
+          git push origin HEAD:main
