@@ -1,0 +1,65 @@
+name: Publish Paladin Windows public mirror
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/paladin-windows-mirror.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    name: Verify and publish Paladin 0.2.7 Windows mirror
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PALADIN_VERSION: 0.2.7-beta
+      PALADIN_TAG: paladin-0.2.7-beta
+      PALADIN_SHA256: e5c13aaa53a1a9f73cad643851695ea3fca376301da8cf449c9e780aced5d0de
+      PALADIN_BYTES: '102289408'
+      PALADIN_SOURCE_URL: https://www.paladinaisecurity.com/downloads/paladin-windows.msi?v=0.2.7-beta
+
+    steps:
+      - name: Check out mirror repository
+        uses: actions/checkout@v4
+
+      - name: Download verified Paladin installer source
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 12 --retry-delay 5 --retry-all-errors \
+            --connect-timeout 30 --max-time 1200 \
+            "$PALADIN_SOURCE_URL" \
+            --output paladin-windows.msi
+
+      - name: Verify exact installer bytes and SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_bytes="$(stat -c%s paladin-windows.msi)"
+          actual_sha="$(sha256sum paladin-windows.msi | awk '{print $1}')"
+          test "$actual_bytes" = "$PALADIN_BYTES" || { echo "Unexpected installer size: $actual_bytes"; exit 1; }
+          test "$actual_sha" = "$PALADIN_SHA256" || { echo "Unexpected installer SHA-256: $actual_sha"; exit 1; }
+          printf '{\n  "product": "Paladin AI Security",\n  "version": "%s",\n  "filename": "paladin-windows.msi",\n  "bytes": %s,\n  "sha256": "%s",\n  "sourceCommit": "47b957cfc8cad0d4b72165ee12840fae77a877e9",\n  "channel": "UNSIGNED BETA"\n}\n' \
+            "$PALADIN_VERSION" "$PALADIN_BYTES" "$PALADIN_SHA256" > paladin-windows-manifest.json
+
+      - name: Publish public GitHub Release mirror
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.PALADIN_TAG }}
+          name: Paladin AI Security Windows 0.2.7 Beta
+          body: |
+            Public download mirror for the verified Paladin AI Security Windows 0.2.7 beta installer.
+
+            SHA-256: `${{ env.PALADIN_SHA256 }}`
+
+            This is an unsigned beta build for testing.
+          prerelease: true
+          make_latest: false
+          files: |
+            paladin-windows.msi
+            paladin-windows-manifest.json
+          fail_on_unmatched_files: true
