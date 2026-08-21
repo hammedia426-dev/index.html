@@ -1,0 +1,20 @@
+{
+  "product": "Paladin AI Security",
+  "version": "0.2.8-beta.3",
+  "nativeInstallerVersion": "0.2.8-3",
+  "filename": "paladin-windows-0.2.8-beta.3.msi",
+  "bytes": 119402496,
+  "sha256": "6abc6d8d80dd0f4e084d5eaf4ad81514c4d708b5da1284353739fa25f62306ff",
+  "sourceCommit": "f7153711edd59e3532a4a7b81189796b5edd640f",
+  "publicAssetVerified": true,
+  "predefinedSocialNetworks": true,
+  "socialAccountSelection": "provider-returned-dropdown-only",
+  "manualSocialHandles": false,
+  "packetGeoMap": true,
+  "systemTray": true,
+  "trayMinimize": true,
+  "malwareAntivirus": true,
+  "maintenanceTools": true,
+  "remoteAccessInventory": true,
+  "geminiAgent": true
+}
