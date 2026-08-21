@@ -1,0 +1,95 @@
+name: Publish Paladin 0.2.8 beta.4 install-verified Windows release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-paladin-0.2.8-beta4.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download install-verified beta.4 artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            'https://sdmntprwestus3.oaiusercontent.com/files/00000000-1fd8-81fd-b494-f508321066be/raw?se=2026-08-21T09%3A01%3A33Z&sp=r&sv=2026-02-06&sr=b&scid=c462512e-3b6e-5014-9e3f-83e60397c910&skoid=b9a47e8b-72a2-4ed3-8028-a2a98c1a6142&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-20T21%3A58%3A59Z&ske=2026-08-21T21%3A58%3A59Z&sks=b&skv=2026-02-06&sig=mqRLHbH7PSvB7rMRuAsn7PyRww4QdwGR9ISZbDy2pYw%3D' \
+            -o artifact.zip
+          unzip -o artifact.zip
+          test -f paladin-windows-0.2.8-beta.4-setup.exe
+          test -f paladin-windows-0.2.8-beta.4.msi
+          test "$(sha256sum paladin-windows-0.2.8-beta.4-setup.exe | awk '{print $1}')" = 'da62ccadcb5dc23d92d97e6b577d5cd2963360a9717acc6573ac88b8b75488f6'
+          test "$(stat -c%s paladin-windows-0.2.8-beta.4-setup.exe)" = '100530429'
+          test "$(sha256sum paladin-windows-0.2.8-beta.4.msi | awk '{print $1}')" = 'b2fe8c2bcfd8c730bc1d4d8aa06f2a96d422b9b0cab996a32450fac6a46bee30'
+          test "$(stat -c%s paladin-windows-0.2.8-beta.4.msi)" = '119402496'
+
+      - name: Create or update beta.4 public release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='paladin-0.2.8-beta.4'
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --prerelease --title 'Paladin AI Security 0.2.8 beta.4' --notes 'Unsigned Windows beta. Install-verified current-user setup EXE plus MSI fallback. Windows Installed Apps registration, installed executable launch, tray runtime, dropdown-only social connector UI, Malware/Defender, Geo Map, maintenance tools, network intelligence and Agent features.'
+          fi
+          gh release upload "$tag" paladin-windows-0.2.8-beta.4-setup.exe paladin-windows-0.2.8-beta.4.msi --clobber
+
+      - name: Verify public assets round-trip
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://github.com/hammedia426-dev/index.html/releases/download/paladin-0.2.8-beta.4'
+          curl --fail --location --silent --show-error "$base/paladin-windows-0.2.8-beta.4-setup.exe" -o public-setup.exe
+          curl --fail --location --silent --show-error "$base/paladin-windows-0.2.8-beta.4.msi" -o public.msi
+          test "$(sha256sum public-setup.exe | awk '{print $1}')" = 'da62ccadcb5dc23d92d97e6b577d5cd2963360a9717acc6573ac88b8b75488f6'
+          test "$(stat -c%s public-setup.exe)" = '100530429'
+          test "$(sha256sum public.msi | awk '{print $1}')" = 'b2fe8c2bcfd8c730bc1d4d8aa06f2a96d422b9b0cab996a32450fac6a46bee30'
+          test "$(stat -c%s public.msi)" = '119402496'
+
+      - name: Write public verification receipt
+        shell: bash
+        run: |
+          cat > paladin-0.2.8-beta.4-public-release.json <<'JSON'
+          {
+            "product": "Paladin AI Security",
+            "version": "0.2.8-beta.4",
+            "nativeInstallerVersion": "0.2.8-4",
+            "preferredInstaller": "nsis-current-user",
+            "setupFilename": "paladin-windows-0.2.8-beta.4-setup.exe",
+            "setupBytes": 100530429,
+            "setupSha256": "da62ccadcb5dc23d92d97e6b577d5cd2963360a9717acc6573ac88b8b75488f6",
+            "msiFilename": "paladin-windows-0.2.8-beta.4.msi",
+            "msiBytes": 119402496,
+            "msiSha256": "b2fe8c2bcfd8c730bc1d4d8aa06f2a96d422b9b0cab996a32450fac6a46bee30",
+            "sourceCommit": "c7b54f5fb26e7235a046c0309c42b752c299fd91",
+            "publicAssetVerified": true,
+            "installedAppsRegistrationVerified": true,
+            "installedExecutableLaunchVerified": true,
+            "msiInstallVerified": true,
+            "nsisCurrentUserInstallVerified": true,
+            "systemTray": true,
+            "trayMinimize": true,
+            "packetGeoMap": true,
+            "connectorsUi": true,
+            "predefinedSocialNetworks": true,
+            "socialAccountSelection": "provider-returned-dropdown-only",
+            "manualSocialHandles": false,
+            "malwareAntivirus": true,
+            "maintenanceTools": true,
+            "remoteAccessInventory": true,
+            "geminiAgent": true
+          }
+          JSON
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add paladin-0.2.8-beta.4-public-release.json
+          git commit -m 'Record verified Paladin 0.2.8 beta.4 public release'
+          git push origin HEAD:main
