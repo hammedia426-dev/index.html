@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: paladin-windows-public-mirror
+  cancel-in-progress: true
+
 jobs:
   mirror:
     name: Verify and publish Paladin 0.2.7 Windows mirror
@@ -21,6 +25,7 @@ jobs:
       PALADIN_SHA256: e5c13aaa53a1a9f73cad643851695ea3fca376301da8cf449c9e780aced5d0de
       PALADIN_BYTES: '102289408'
       PALADIN_SOURCE_URL: https://www.paladinaisecurity.com/downloads/paladin-windows.msi?v=0.2.7-beta
+      PALADIN_PUBLIC_URL: https://github.com/hammedia426-dev/index.html/releases/download/paladin-0.2.7-beta/paladin-windows.msi
 
     steps:
       - name: Check out mirror repository
@@ -63,3 +68,26 @@ jobs:
             paladin-windows.msi
             paladin-windows-manifest.json
           fail_on_unmatched_files: true
+
+      - name: Record verified mirror status
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > paladin-mirror-status.json <<EOF
+          {
+            "ready": true,
+            "product": "Paladin AI Security",
+            "version": "$PALADIN_VERSION",
+            "url": "$PALADIN_PUBLIC_URL",
+            "bytes": $PALADIN_BYTES,
+            "sha256": "$PALADIN_SHA256",
+            "verifiedByWorkflow": true
+          }
+          EOF
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add paladin-mirror-status.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Record verified Paladin Windows mirror status'
+            git push origin HEAD:main
+          fi
