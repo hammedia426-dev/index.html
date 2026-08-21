@@ -49,3 +49,33 @@ jobs:
           curl --fail --location --silent --show-error "$url" -o public.msi
           test "$(sha256sum public.msi | awk '{print $1}')" = 'cdf88bdd62d644dcdc7aea0c55649b0601c06523eb15782494aae1aafc06a096'
           test "$(stat -c%s public.msi)" = '119398400'
+
+      - name: Commit public verification receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > paladin-0.2.8-beta.2-public-release.json <<'JSON'
+          {
+            "product": "Paladin AI Security",
+            "version": "0.2.8-beta.2",
+            "nativeInstallerVersion": "0.2.8-2",
+            "filename": "paladin-windows-0.2.8-beta.2.msi",
+            "bytes": 119398400,
+            "sha256": "cdf88bdd62d644dcdc7aea0c55649b0601c06523eb15782494aae1aafc06a096",
+            "sourceCommit": "3cb257db2bdb3678fbbcce2396994258204dae8a",
+            "publicAssetVerified": true,
+            "systemTray": true,
+            "trayMinimize": true,
+            "malwareAntivirus": true,
+            "packetGeoMap": true,
+            "connectorsUi": true,
+            "maintenanceTools": true,
+            "remoteAccessInventory": true,
+            "geminiAgent": true
+          }
+          JSON
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add paladin-0.2.8-beta.2-public-release.json
+          git commit -m 'Verify public Paladin 0.2.8 beta.2 release'
+          git push origin HEAD:main
