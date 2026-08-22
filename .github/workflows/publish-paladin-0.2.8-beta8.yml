@@ -1,0 +1,103 @@
+name: Publish Paladin 0.2.8 beta.8 install-verified Windows release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-paladin-0.2.8-beta8.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download install-verified beta.8 artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            'https://sdmntprwestus3.oaiusercontent.com/files/00000000-0e3c-81fd-af1f-3fe7efcbac95/raw?se=2026-08-22T19%3A35%3A21Z&sp=r&sv=2026-02-06&sr=b&scid=ac14aa5d-8db2-5e04-bc3f-895a87287f6d&skoid=b869bb08-96ac-4184-ab38-9c45e2890c4c&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-22T00%3A46%3A21Z&ske=2026-08-23T00%3A46%3A21Z&sks=b&skv=2026-02-06&sig=qkCTnLdpEZGvHmbGUBn63M%2BAA3SBHj2TbHD9tocvOkQ%3D' \
+            -o artifact.zip
+          unzip -o artifact.zip
+          test -f paladin-windows-0.2.8-beta.8-setup.exe
+          test -f paladin-windows-0.2.8-beta.8.msi
+          test -f paladin-windows-0.2.8-beta.8-manifest.json
+          test "$(sha256sum paladin-windows-0.2.8-beta.8-setup.exe | awk '{print $1}')" = '5462888639484b5d1412d67bb91a7d3c2e660c3f15531a97068db0c5914b6f7c'
+          test "$(stat -c%s paladin-windows-0.2.8-beta.8-setup.exe)" = '20984095'
+          test "$(sha256sum paladin-windows-0.2.8-beta.8.msi | awk '{print $1}')" = '9bd6953acc982813706008cc8e50a1caf6ce3de07ded2c1a462127b836a5b84d'
+          test "$(stat -c%s paladin-windows-0.2.8-beta.8.msi)" = '24866816'
+          node - <<'NODE'
+          const fs = require('fs');
+          const m = JSON.parse(fs.readFileSync('paladin-windows-0.2.8-beta.8-manifest.json','utf8'));
+          for (const key of ['publicBetaUpgradeVerified','msiInstallVerified','installedAppsRegistrationVerified','multiInterfacePacketCapture','tcpHandshakeTelemetry','animatedTrafficFlowPaths','malwareScannerPersistent','updaterStatusEnabled','nativeUpdateNotifications']) {
+            if (m[key] !== true) throw new Error(`${key} is not verified`);
+          }
+          if (m.haloAnimation !== false) throw new Error('Halo animation must remain disabled');
+          if (m.packetPayloadCapture !== false) throw new Error('Packet payload capture must remain disabled');
+          if (m.version !== '0.2.8-beta.8' || m.nativeInstallerVersion !== '0.2.8-8') throw new Error('Wrong beta.8 version');
+          NODE
+
+      - name: Create beta.8 public release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='paladin-0.2.8-beta.8'
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --prerelease --title 'Paladin AI Security 0.2.8 beta.8' --notes 'Install-verified Windows beta. Restores beta.5-style curved animated traffic flow paths using real packet direction and handshake telemetry. Green outbound, blue inbound, red high-risk inbound; no halo animation. Malware scanner remains persistent and updater notifications are included. Packet payload capture remains disabled.'
+          fi
+          gh release upload "$tag" paladin-windows-0.2.8-beta.8-setup.exe paladin-windows-0.2.8-beta.8.msi paladin-windows-0.2.8-beta.8-manifest.json --clobber
+
+      - name: Verify public beta.8 assets round-trip
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://github.com/hammedia426-dev/index.html/releases/download/paladin-0.2.8-beta.8'
+          curl --fail --location --silent --show-error "$base/paladin-windows-0.2.8-beta.8-setup.exe" -o public-setup.exe
+          curl --fail --location --silent --show-error "$base/paladin-windows-0.2.8-beta.8.msi" -o public.msi
+          test "$(sha256sum public-setup.exe | awk '{print $1}')" = '5462888639484b5d1412d67bb91a7d3c2e660c3f15531a97068db0c5914b6f7c'
+          test "$(stat -c%s public-setup.exe)" = '20984095'
+          test "$(sha256sum public.msi | awk '{print $1}')" = '9bd6953acc982813706008cc8e50a1caf6ce3de07ded2c1a462127b836a5b84d'
+          test "$(stat -c%s public.msi)" = '24866816'
+
+      - name: Write beta.8 public verification receipt
+        shell: bash
+        run: |
+          cat > paladin-0.2.8-beta.8-public-release.json <<'JSON'
+          {
+            "product": "Paladin AI Security",
+            "version": "0.2.8-beta.8",
+            "nativeInstallerVersion": "0.2.8-8",
+            "preferredInstaller": "nsis-current-user",
+            "setupFilename": "paladin-windows-0.2.8-beta.8-setup.exe",
+            "setupBytes": 20984095,
+            "setupSha256": "5462888639484b5d1412d67bb91a7d3c2e660c3f15531a97068db0c5914b6f7c",
+            "msiFilename": "paladin-windows-0.2.8-beta.8.msi",
+            "msiBytes": 24866816,
+            "msiSha256": "9bd6953acc982813706008cc8e50a1caf6ce3de07ded2c1a462127b836a5b84d",
+            "sourceCommit": "26ee8d444c93996b5fb6f2572c035dd96f4c6736",
+            "publicAssetVerified": true,
+            "publicBetaUpgradeVerified": true,
+            "installedAppsRegistrationVerified": true,
+            "msiInstallVerified": true,
+            "multiInterfacePacketCapture": true,
+            "tcpHandshakeTelemetry": true,
+            "animatedTrafficFlowPaths": true,
+            "haloAnimation": false,
+            "malwareScannerPersistent": true,
+            "updaterStatusEnabled": true,
+            "nativeUpdateNotifications": true,
+            "packetPayloadCapture": false
+          }
+          JSON
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add paladin-0.2.8-beta.8-public-release.json
+          git commit -m 'Record verified Paladin 0.2.8 beta.8 public release'
+          git push origin HEAD:main
